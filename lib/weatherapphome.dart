@@ -22,14 +22,16 @@ class _WeatherapphomeState extends State<Weatherapphome> {
   dynamic windSpeed = 7.5;
   dynamic pressureVlaue = 99.9;
   dynamic results;
+  bool isFetching = false;
 
   // function to fetch data
   Future fetchData() async {
     final uri =
-        "http://api.openweathermap.org/data/2.5/forecast?q=Pokhara,np&APPID=2f5981bada075205d9597abf9b490fce";
+        "http://api.openweathermap.org/data/2.5/forecast?q=pokhara,np&APPID=2f5981bada075205d9597abf9b490fce";
     final url = Uri.parse(uri);
 
     try {
+      isFetching = true;
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -42,11 +44,18 @@ class _WeatherapphomeState extends State<Weatherapphome> {
           pressureVlaue = result['list'][0]['main']['pressure'];
           humidityLevel = result['list'][0]['main']['humidity'];
         });
+        isFetching = false;
       } else {
         debugPrint("Failed: ${response.statusCode}");
+        isFetching = false;
+
+        throw "Something went wrong : ${response.statusCode}";
       }
     } catch (e) {
       debugPrint("Error: $e");
+      isFetching = false;
+
+      throw "Internal server error : $e";
     }
   }
 
@@ -79,44 +88,113 @@ class _WeatherapphomeState extends State<Weatherapphome> {
       drawer: Drawer(
         child: Column(children: [DrawerHeader(child: Text("W E A T H E R"))]),
       ),
-      body: Padding(
-        padding: EdgeInsetsGeometry.only(top: 20, left: 10, right: 10, bottom: 10),
-        child: Column(
-          children: [
-            // main container which show the recent Weather
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: const Color.fromARGB(255, 49, 48, 48),
-              ),
-              padding: EdgeInsets.all(10),
+      body: isFetching
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: EdgeInsetsGeometry.only(top: 20, left: 10, right: 10, bottom: 10),
               child: Column(
                 children: [
-                  Padding(
-                    padding: EdgeInsetsGeometry.all(8),
+                  // main container which show the recent Weather
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: const Color.fromARGB(255, 49, 48, 48),
+                    ),
+                    padding: EdgeInsets.all(10),
                     child: Column(
                       children: [
-                        Text(
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        Padding(
+                          padding: EdgeInsetsGeometry.all(8),
+                          child: Column(
+                            children: [
+                              Text(
+                                style: TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                "$temp k",
+                              ),
+                              Icon(
+                                weatherIcon == "Rain"
+                                    ? Icons.cloudy_snowing
+                                    : weatherIcon == "Clear"
+                                    ? Icons.sunny
+                                    : Icons.cloud,
+                                size: 120,
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                weather,
+                              ),
+                            ],
                           ),
-                          "$temp k",
                         ),
-                        Icon(
-                          weatherIcon == "Rain"
-                              ? Icons.cloudy_snowing
-                              : weatherIcon == "Clear"
-                              ? Icons.sunny
-                              : Icons.cloud,
-                          size: 120,
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 25),
+                  // this is the forcast part
+                  SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      textAlign: TextAlign.start,
+                      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                      "Hourly Forcast",
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  // scrollable forcast
+                  SizedBox(
+                    height: 120,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 8,
+                      itemBuilder: (context, index) {
+                        final hourlyData = results['list'][index + 1];
+                        final hourlyTemp = hourlyData['main']['temp'].toString();
+                        final hourlyWeatherIcon = hourlyData['weather'][0]['main'];
+                        DateTime parsedDate = DateTime.parse(hourlyData['dt_txt']);
+                        String formattedTime = DateFormat.jm().format(parsedDate);
+                        return Forcastwidget(
+                          time: formattedTime,
+                          icon: hourlyWeatherIcon,
+                          temp: hourlyTemp,
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(height: 25),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      textAlign: TextAlign.start,
+                      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                      "Additional Information",
+                    ),
+                  ),
+                  SizedBox(
+                    child: Row(
+                      children: [
+                        Additional(
+                          title: "Humidity",
+                          icon: "Humidity",
+                          value: humidityLevel.toString().toString(),
                         ),
-                        SizedBox(height: 6),
-                        Text(
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-                          weather,
+                        Additional(
+                          title: "Wind Speed",
+                          icon: "Air",
+                          value: windSpeed.toString(),
+                        ),
+                        Additional(
+                          title: "Pressure",
+                          icon: "Pressure",
+                          value: pressureVlaue.toString(),
                         ),
                       ],
                     ),
@@ -124,70 +202,6 @@ class _WeatherapphomeState extends State<Weatherapphome> {
                 ],
               ),
             ),
-            SizedBox(height: 25),
-            // this is the forcast part
-            SizedBox(
-              width: double.infinity,
-              child: Text(
-                textAlign: TextAlign.start,
-                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-                "Hourly Forcast",
-              ),
-            ),
-            SizedBox(height: 10),
-            // scrollable forcast
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: 8,
-                itemBuilder: (context, index) {
-                  final hourlyData = results['list'][index + 1];
-                  final hourlyTemp = hourlyData['main']['temp'].toString();
-                  final hourlyWeatherIcon = hourlyData['weather'][0]['main'];
-                  DateTime parsedDate = DateTime.parse(hourlyData['dt_txt']);
-                  String formattedTime = DateFormat.jm().format(parsedDate);
-                  return Forcastwidget(
-                    time: formattedTime,
-                    icon: hourlyWeatherIcon,
-                    temp: hourlyTemp,
-                  );
-                },
-              ),
-            ),
-            SizedBox(height: 25),
-            SizedBox(
-              width: double.infinity,
-              child: Text(
-                textAlign: TextAlign.start,
-                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-                "Additional Information",
-              ),
-            ),
-            SizedBox(
-              child: Row(
-                children: [
-                  Additional(
-                    title: "Humidity",
-                    icon: "Humidity",
-                    value: humidityLevel.toString().toString(),
-                  ),
-                  Additional(
-                    title: "Wind Speed",
-                    icon: "Air",
-                    value: windSpeed.toString(),
-                  ),
-                  Additional(
-                    title: "Pressure",
-                    icon: "Pressure",
-                    value: pressureVlaue.toString(),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
