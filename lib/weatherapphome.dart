@@ -1,10 +1,10 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:weatherapp/additional.dart';
 import 'package:weatherapp/forcastwidget.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:weatherapp/search.dart';
 
 class Weatherapphome extends StatefulWidget {
   const Weatherapphome({super.key});
@@ -23,15 +23,18 @@ class _WeatherapphomeState extends State<Weatherapphome> {
   dynamic pressureVlaue = 99.9;
   dynamic results;
   bool isFetching = false;
+  String cityName = "Kathmandu";
 
-  // function to fetch data
+  // Function to fetch data
   Future fetchData() async {
     final uri =
-        "http://api.openweathermap.org/data/2.5/forecast?q=pokhara,np&APPID=2f5981bada075205d9597abf9b490fce";
+        "http://api.openweathermap.org/data/2.5/forecast?q=$cityName,np&APPID=2f5981bada075205d9597abf9b490fce";
     final url = Uri.parse(uri);
 
     try {
-      isFetching = true;
+      setState(() {
+        isFetching = true;
+      });
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -43,20 +46,34 @@ class _WeatherapphomeState extends State<Weatherapphome> {
           windSpeed = result['list'][0]['wind']['speed'];
           pressureVlaue = result['list'][0]['main']['pressure'];
           humidityLevel = result['list'][0]['main']['humidity'];
+          isFetching = false;
         });
-        isFetching = false;
       } else {
         debugPrint("Failed: ${response.statusCode}");
-        isFetching = false;
-
-        throw "Something went wrong : ${response.statusCode}";
+        setState(() {
+          isFetching = false;
+        });
+        ScaffoldMessenger.of(
+          // ignore: use_build_context_synchronously
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error fetching data for $cityName")));
       }
     } catch (e) {
       debugPrint("Error: $e");
-      isFetching = false;
-
-      throw "Internal server error : $e";
+      setState(() {
+        isFetching = false;
+      });
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
+  }
+
+  // Callback to update cityName and refetch data
+  void _refetchData(String newCityName) {
+    setState(() {
+      cityName = newCityName.isNotEmpty ? newCityName : cityName;
+    });
+    fetchData();
   }
 
   @override
@@ -81,8 +98,18 @@ class _WeatherapphomeState extends State<Weatherapphome> {
           "Weather App",
         ),
         actions: [
-          Icon(Icons.search, size: 30, color: const Color.fromARGB(255, 186, 186, 186)),
-          Padding(padding: EdgeInsetsGeometry.symmetric(horizontal: 5)),
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) {
+                  return Search(cityName: cityName, onPressed: _refetchData);
+                },
+              );
+            },
+            icon: Icon(Icons.search), // Changed to search icon for clarity
+          ),
+          Padding(padding: EdgeInsets.symmetric(horizontal: 10)),
         ],
       ),
       drawer: Drawer(
@@ -91,10 +118,10 @@ class _WeatherapphomeState extends State<Weatherapphome> {
       body: isFetching
           ? Center(child: CircularProgressIndicator())
           : Padding(
-              padding: EdgeInsetsGeometry.only(top: 20, left: 10, right: 10, bottom: 10),
+              padding: EdgeInsets.only(top: 20, left: 10, right: 10, bottom: 10),
               child: Column(
                 children: [
-                  // main container which show the recent Weather
+                  // Main container showing recent weather
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
@@ -105,7 +132,7 @@ class _WeatherapphomeState extends State<Weatherapphome> {
                     child: Column(
                       children: [
                         Padding(
-                          padding: EdgeInsetsGeometry.all(8),
+                          padding: EdgeInsets.all(8),
                           child: Column(
                             children: [
                               Text(
@@ -114,23 +141,30 @@ class _WeatherapphomeState extends State<Weatherapphome> {
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
-                                "$temp k",
+                                "${(temp - 273.15).toStringAsFixed(1)} °C", // Convert Kelvin to Celsius
                               ),
                               Icon(
                                 weatherIcon == "Rain"
                                     ? Icons.cloudy_snowing
                                     : weatherIcon == "Clear"
-                                    ? Icons.sunny
+                                    ? Icons.wb_sunny
                                     : Icons.cloud,
                                 size: 120,
+                                color: Colors.white,
                               ),
                               SizedBox(height: 6),
                               Text(
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w500,
+                                  color: Colors.white,
                                 ),
                                 weather,
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                style: TextStyle(fontSize: 18, color: Colors.white),
+                                cityName,
                               ),
                             ],
                           ),
@@ -139,62 +173,74 @@ class _WeatherapphomeState extends State<Weatherapphome> {
                     ),
                   ),
                   SizedBox(height: 25),
-                  // this is the forcast part
+                  // Forecast part
                   SizedBox(
                     width: double.infinity,
                     child: Text(
                       textAlign: TextAlign.start,
-                      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-                      "Hourly Forcast",
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      "Hourly Forecast",
                     ),
                   ),
                   SizedBox(height: 10),
-                  // scrollable forcast
+                  // Scrollable forecast
                   SizedBox(
                     height: 120,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 8,
-                      itemBuilder: (context, index) {
-                        final hourlyData = results['list'][index + 1];
-                        final hourlyTemp = hourlyData['main']['temp'].toString();
-                        final hourlyWeatherIcon = hourlyData['weather'][0]['main'];
-                        DateTime parsedDate = DateTime.parse(hourlyData['dt_txt']);
-                        String formattedTime = DateFormat.jm().format(parsedDate);
-                        return Forcastwidget(
-                          time: formattedTime,
-                          icon: hourlyWeatherIcon,
-                          temp: hourlyTemp,
-                        );
-                      },
-                    ),
+                    child: results == null
+                        ? Center(child: Text("No forecast data"))
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: 5,
+                            itemBuilder: (context, index) {
+                              final hourlyData = results['list'][index + 1];
+                              final hourlyTemp = (hourlyData['main']['temp'] - 273.15)
+                                  .toStringAsFixed(1);
+                              final hourlyWeatherIcon = hourlyData['weather'][0]['main'];
+                              DateTime parsedDate = DateTime.parse(hourlyData['dt_txt']);
+                              String formattedTime = DateFormat.jm().format(parsedDate);
+                              return Forcastwidget(
+                                time: formattedTime,
+                                icon: hourlyWeatherIcon,
+                                temp: "$hourlyTemp °C",
+                              );
+                            },
+                          ),
                   ),
                   SizedBox(height: 25),
                   SizedBox(
                     width: double.infinity,
                     child: Text(
                       textAlign: TextAlign.start,
-                      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                       "Additional Information",
                     ),
                   ),
                   SizedBox(
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         Additional(
                           title: "Humidity",
                           icon: "Humidity",
-                          value: humidityLevel.toString().toString(),
+                          value: "$humidityLevel%",
                         ),
                         Additional(
                           title: "Wind Speed",
                           icon: "Air",
-                          value: windSpeed.toString(),
+                          value: "$windSpeed m/s",
                         ),
                         Additional(
                           title: "Pressure",
                           icon: "Pressure",
-                          value: pressureVlaue.toString(),
+                          value: "$pressureVlaue hPa",
                         ),
                       ],
                     ),
